@@ -2,7 +2,7 @@
 
 We Are One aims to make nearby iPhones and Android phones act as a single speaker. One phone selects the group as its system media output and controls playback in the original app. YouTube, YouTube Music, and Spotify are launch compatibility targets. The host phone is intended to play alongside the group.
 
-The first prototype uses a Mac on the same Wi-Fi network to coordinate a 16-second test beat on two phone browsers. It includes device-specific delay adjustment. JavaScript syntax checks passed. Playback on physical devices remains pending.
+The first prototype uses a Mac on the same Wi-Fi network to coordinate a 16-second or two-minute test beat on two phone browsers. It includes device-specific delay adjustment. Local HTTP and simulated browser timing checks passed. Playback on physical devices remains pending.
 
 ## Roadmap
 

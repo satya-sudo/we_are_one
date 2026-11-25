@@ -11,14 +11,22 @@
   button { display: block; width: 100%; padding: .9rem; margin: .8rem 0; border: 0; border-radius: .6rem; background: #c7ff79; color: #142008; font: inherit; font-weight: 700 }
   button:disabled { opacity: .45 }
   label, input { display: block; width: 100%; margin-top: 1rem }
+  select { margin-top: .35rem; font: inherit }
+  #diagnostics { color: #c2c7ce; font-variant-numeric: tabular-nums }
   #status { min-height: 3rem }
 </style>
 <main>
   <h1>We Are One</h1>
   <p>Enable your speaker on both phones. Start the sync test from either one.</p>
   <button id="enable">Enable speaker</button>
+  <label for="mode">Test length</label>
+  <select id="mode">
+    <option value="quick">16-second check</option>
+    <option value="drift">2-minute drift check</option>
+  </select>
   <button id="start" disabled>Start sync test</button>
   <p id="status" role="status">Waiting for you to enable audio.</p>
+  <p id="diagnostics"></p>
   <label for="trim">Playback delay <output id="value">0 ms</output></label>
   <input type="range" id="trim" min="0" max="120" step="2" value="0">
 </main>
@@ -28,7 +36,11 @@
   const status = document.querySelector('#status');
   const trim = document.querySelector('#trim');
   const value = document.querySelector('#value');
-  let audio, knownSession, offset;
+  const mode = document.querySelector('#mode');
+  const diagnostics = document.querySelector('#diagnostics');
+  const beatMs = 500;
+  let audio, knownSession, clockId;
+  let missedBeats = 0;
   let nextBeat = 0;
   let polling = false;
   let timer;
@@ -38,11 +50,17 @@
 
   async function request(path, method = 'GET') {
     const before = performance.now();
-    const response = await fetch(path, {method, signal: AbortSignal.timeout(2000)});
-    if (!response.ok) throw new Error('Request failed');
-    const result = await response.json();
-    const after = performance.now();
-    return {...result, trip: after - before, offset: result.now - (before + after) / 2};
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    try {
+      const response = await fetch(path, {method, signal: controller.signal});
+      if (!response.ok) throw new Error('Request failed');
+      const result = await response.json();
+      const after = performance.now();
+      return {...result, trip: after - before, offset: result.now - (before + after) / 2};
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   function tick(at, accent) {
@@ -62,25 +80,40 @@
     polling = true;
     try {
       const state = await request('/state');
+      if (state.clockId !== clockId) {
+        clockId = state.clockId;
+        samples = [];
+        knownSession = undefined;
+        missedBeats = 0;
+      }
       samples.push(state);
       if (samples.length > 20) samples.shift();
-      offset = samples.reduce((best, sample) => sample.trip < best.trip ? sample : best).offset;
+      const best = samples.reduce((best, sample) => sample.trip < best.trip ? sample : best);
+      const localNow = performance.now();
       const session = state.session;
       if (session && session.start !== knownSession) {
         knownSession = session.start;
         nextBeat = 0;
+        missedBeats = 0;
       }
-      const active = session && performance.now() + offset < session.start + session.count * 500;
+      const active = session && localNow + best.offset < session.start + session.count * beatMs;
       if (active) {
         while (nextBeat < session.count) {
-          const delay = session.start + nextBeat * 500 + Number(trim.value) - (performance.now() + offset);
-          if (delay > 350) break;
-          if (delay >= 15) tick(audio.currentTime + delay / 1000, nextBeat % 4 === 0);
+          const target = session.start + nextBeat * beatMs + Number(trim.value) - best.offset;
+          if (target - localNow > 350) break;
+          const output = audio.getOutputTimestamp?.();
+          const at = output?.performanceTime > 0
+            ? output.contextTime + (target - output.performanceTime) / 1000
+            : audio.currentTime + (target - localNow) / 1000;
+          if (at >= audio.currentTime + 0.015) tick(at, nextBeat % 4 === 0);
+          else missedBeats++;
           nextBeat++;
         }
       }
       start.disabled = Boolean(active);
       status.textContent = active ? 'Sync test in progress. Keep this screen open.' : 'Ready to play.';
+      diagnostics.textContent = 'Best Wi-Fi round trip: ' + Math.round(best.trip) +
+        ' ms · Late beats skipped: ' + missedBeats;
     } catch {
       start.disabled = true;
       status.textContent = 'Connection lost. Reconnecting…';
@@ -112,7 +145,7 @@
   start.onclick = async () => {
     start.disabled = true;
     try {
-      await request('/start', 'POST');
+      await request(mode.value === 'drift' ? '/start?mode=drift' : '/start', 'POST');
       await poll();
     } catch {
       status.textContent = 'Could not start the test. Reconnecting…';
