@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>We Are One</title>
+<style>
+  * { box-sizing: border-box }
+  body { background: #111418; color: #f5f6f7; font: 1rem system-ui; margin: auto; max-width: 30rem; padding: 3rem 1.25rem }
+  h1 { font-size: 2.6rem; margin: 0 0 .5rem }
+  p { line-height: 1.5 }
+  button { display: block; width: 100%; padding: .9rem; margin: .8rem 0; border: 0; border-radius: .6rem; background: #c7ff79; color: #142008; font: inherit; font-weight: 700 }
+  button:disabled { opacity: .45 }
+  label, input { display: block; width: 100%; margin-top: 1rem }
+  #status { min-height: 3rem }
+</style>
+<main>
+  <h1>We Are One</h1>
+  <p>Enable your speaker on both phones. Start the sync test from either one.</p>
+  <button id="enable">Enable speaker</button>
+  <button id="start" disabled>Start sync test</button>
+  <p id="status" role="status">Waiting for you to enable audio.</p>
+  <label for="trim">Playback delay <output id="value">0 ms</output></label>
+  <input type="range" id="trim" min="0" max="120" step="2" value="0">
+</main>
+<script>
+  const enable = document.querySelector('#enable');
+  const start = document.querySelector('#start');
+  const status = document.querySelector('#status');
+  const trim = document.querySelector('#trim');
+  const value = document.querySelector('#value');
+  let audio, knownSession, offset;
+  let nextBeat = 0;
+  let polling = false;
+  let timer;
+  let samples = [];
+
+  trim.oninput = () => { value.textContent = trim.value + ' ms'; };
+
+  async function request(path, method = 'GET') {
+    const before = performance.now();
+    const response = await fetch(path, {method, signal: AbortSignal.timeout(2000)});
+    if (!response.ok) throw new Error('Request failed');
+    const result = await response.json();
+    const after = performance.now();
+    return {...result, trip: after - before, offset: result.now - (before + after) / 2};
+  }
+
+  function tick(at, accent) {
+    const tone = audio.createOscillator();
+    const volume = audio.createGain();
+    tone.frequency.value = accent ? 1200 : 800;
+    volume.gain.setValueAtTime(0.001, at);
+    volume.gain.exponentialRampToValueAtTime(0.23, at + 0.003);
+    volume.gain.exponentialRampToValueAtTime(0.001, at + 0.035);
+    tone.connect(volume).connect(audio.destination);
+    tone.start(at);
+    tone.stop(at + 0.04);
+  }
+
+  async function poll() {
+    if (polling || !audio || audio.state !== 'running') return;
+    polling = true;
+    try {
+      const state = await request('/state');
+      samples.push(state);
+      if (samples.length > 20) samples.shift();
+      offset = samples.reduce((best, sample) => sample.trip < best.trip ? sample : best).offset;
+      const session = state.session;
+      if (session && session.start !== knownSession) {
+        knownSession = session.start;
+        nextBeat = 0;
+      }
+      const active = session && performance.now() + offset < session.start + session.count * 500;
+      if (active) {
+        while (nextBeat < session.count) {
+          const delay = session.start + nextBeat * 500 + Number(trim.value) - (performance.now() + offset);
+          if (delay > 350) break;
+          if (delay >= 15) tick(audio.currentTime + delay / 1000, nextBeat % 4 === 0);
+          nextBeat++;
+        }
+      }
+      start.disabled = Boolean(active);
+      status.textContent = active ? 'Sync test in progress. Keep this screen open.' : 'Ready to play.';
+    } catch {
+      start.disabled = true;
+      status.textContent = 'Connection lost. Reconnecting…';
+    } finally {
+      polling = false;
+    }
+  }
+
+  enable.onclick = async () => {
+    try {
+      audio ??= new AudioContext();
+      await audio.resume();
+      if (audio.state !== 'running') throw new Error('Audio is paused');
+      tick(audio.currentTime + 0.03, true);
+      timer ??= setInterval(poll, 120);
+      enable.disabled = true;
+      audio.onstatechange = () => {
+        if (audio.state === 'running') return;
+        enable.disabled = false;
+        start.disabled = true;
+        status.textContent = 'Tap Enable speaker to resume.';
+      };
+      await poll();
+    } catch {
+      status.textContent = 'Audio could not start. Tap Enable speaker to retry.';
+    }
+  };
+
+  start.onclick = async () => {
+    start.disabled = true;
+    try {
+      await request('/start', 'POST');
+      await poll();
+    } catch {
+      status.textContent = 'Could not start the test. Reconnecting…';
+    }
+  };
+</script>
+</html>
