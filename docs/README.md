@@ -10,7 +10,7 @@ The first prototype uses a Mac on the same Wi-Fi network to coordinate a 16-seco
 | --- | --- | --- |
 | 1. Two-phone playback | Scheduled test beats on iPhone and Android | Repeatable single clicks with both speakers active |
 | 2. Live audio | One authorized live audio stream sent to both phones | Sustained playback and recovery after a brief disconnect |
-| 3. System output | Android system route and an AirPlay-compatible iPhone host prototype | A source app plays through the route and the host speaker joins in sync |
+| 3. System output | Android system route and an iPhone system-output prototype | A source app plays through the route and the host speaker joins in sync |
 | 4. Streaming compatibility | YouTube, YouTube Music, and Spotify through supported routes | Per-service tests and confirmation of the applicable permissions |
 
 Investigate iPhone hosting alongside the sync prototype. Its system output path and the host speaker are significant feasibility questions.
@@ -18,6 +18,7 @@ Investigate iPhone hosting alongside the sync prototype. Its system output path 
 ## Project records
 
 - [Technical and product decisions](decisions.md)
+- [iPhone hosting feasibility](iphone-hosting.md)
 - [Test plan and results](testing.md)
 - [Development log](progress.md)
 - [Prototype server](../server.mjs) and [phone interface](../index.html)

@@ -12,3 +12,4 @@
 - Added a two-minute drift check, browser audio-output timestamp compensation, and per-phone network and missed-beat diagnostics.
 - Verified the local HTTP routes and simulated client timing, including two clocks, different speaker delays, concurrent starts, and a server restart.
 - Updated the physical procedure to compare the start and finish of a two-minute run. Actual speaker timing and browser behavior remain pending.
+- Identified the iOS 27 Media Device extension as a candidate system-output route. Documented its entitlement requirement, real-time audio path, and physical validation steps.
