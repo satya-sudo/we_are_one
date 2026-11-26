@@ -29,6 +29,7 @@ const server = createServer((req, res) => {
   res.end(JSON.stringify({clockId, now: now(), session}));
 }).listen(port, '0.0.0.0', () => {
   const actualPort = server.address().port;
+  console.log('Mac: http://127.0.0.1:' + actualPort);
   console.log('Open the same Wi-Fi address on both phones:');
   for (const address of Object.values(networkInterfaces()).flat()) {
     if (address.family === 'IPv4' && !address.internal) {

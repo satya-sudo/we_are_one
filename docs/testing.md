@@ -12,6 +12,10 @@ After the short check passes, run **2-minute drift check** with the same delays.
 
 A pass requires both audible speakers and one perceived click on two consecutive runs at the recorded settings. This is a listening test. A microphone recording and waveform measurement can quantify timing later.
 
+## Automated checks
+
+Run `node --test tests/*.test.mjs` from the project directory with Node.js 22 or later. The timing check simulates Web Audio clocks without speakers. The HTTP check starts a temporary server on an available port and requires local socket access.
+
 ## Results
 
 | Date | Check | Result |
